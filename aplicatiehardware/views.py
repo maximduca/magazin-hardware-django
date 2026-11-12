@@ -1,5 +1,8 @@
 from django.http import HttpResponse
 from datetime import datetime
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from .models import Componenta
+from django.shortcuts import render
 
 def get_ip(request):
     req_headers = request.META
@@ -73,7 +76,18 @@ def index(request):
 
 def info(request):
     inregistreaza_vizita(request)
-    return HttpResponse("Informatii despre server si componente.")
+    
+    tip = request.GET.get('data')
+    
+    vizita_curenta = istoric_accesari[-1]
+    
+    html = "<h1>Informații despre server</h1>"
+    html += "<p>Informatii despre server si componente.</p>"
+    
+    # traduce data în română
+    html += vizita_curenta.data(tip_afisare=tip)
+    
+    return HttpResponse(html)
 
 def despre(request):
     inregistreaza_vizita(request)
@@ -84,8 +98,27 @@ def istoric(request):
     return HttpResponse("Aici va aparea un istoric al magazinului in viitor.")
 
 def produse(request):
-    inregistreaza_vizita(request)
-    return HttpResponse("Pagina de produse este in lucru.")
+    nrPagina = request.GET.get("pagina")
+    
+    produse = Componenta.objects.all() 
+    
+    paginator = Paginator(produse, 5) 
+    mesajEroare = None
+    
+    try:
+        obPagina = paginator.page(nrPagina)
+    except PageNotAnInteger:
+        obPagina = paginator.page(1)
+    except EmptyPage:
+        obPagina = None
+        mesajEroare = "Nu mai sunt produse"
+        
+    return render(request, 'produse.html',
+                    {
+                        'pagina': obPagina,
+                        'eroare': mesajEroare
+                    }
+    )
 
 def contact(request):
     inregistreaza_vizita(request)
@@ -163,9 +196,14 @@ def pagina_log(request):
             for c in coloane:
                 if c == 'id': html += f"<td>{a.id}</td>"
                 elif c == 'url': html += f"<td>{a.url()}</td>"
-                else: html += f"<td>-</td>" # simplificat pentru alte proprietati
+                else: html += f"<td>-</td>" 
             html += "</tr>"
         html += "</table>"
+    if not val_accesari and not val_tabel:
+        html += "<h3>Vizite filtrate:</h3><ul>"
+        for a in lista_afisare:
+            html += f"<li>ID: {a.id} | Pagina: {a.pagina()} | IP: {a.ip_client}</li>"
+        html += "</ul>"
         
     # Statistica cea mai vizitata / putin vizitata
     frecvente = {}
